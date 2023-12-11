@@ -1,17 +1,24 @@
+from MasterDataS3 import MasterDataS3 as msd3
+import hashlib
+import time
+
+from pyspark.sql.functions import sha2, concat_ws, approx_count_distinct, col
+
 class DataQualityIndexOf:
     # List of dimensions
     uniqueness_ = "Uniqueness"
     completeness_ = "Completeness"
     rangeAdherence_ = "RangeAdherence"
     formatAdherence_ = "FormatAdherence"
-      
-    def __init__(self, path_to_csv=None, yaml_file=None):
+
+    def __init__(self, spark_session=None ,path_to_csv=None, yaml_file=None):
         
+        self.spark = spark_session
         # Validating the path_to_csv variable
         if path_to_csv == None:
             raise "Path to csv not provided"
         else:
-            self.table_df = spark.read.csv(path=path_to_csv,header=True)
+            self.table_df = self.spark.read.csv(path=path_to_csv,header=True)
         
         # Validating the yaml_file variable
         if (yaml_file == None):
@@ -22,7 +29,7 @@ class DataQualityIndexOf:
         hashlib.sha1().update(str(time.time()).encode("utf-8"))
 
         # Creating a temporary table name for spark sql queries and further operations
-        self.table_name = "table_"+hashlib.sha1().hexdigest()[:5]
+        self.table_name = "table_" + hashlib.sha1().hexdigest()[:5]
         self.table_df.createOrReplaceTempView(self.table_name)
 
         # List of dimensions
@@ -46,13 +53,20 @@ class DataQualityIndexOf:
         # Format Adherence details
         self.formatadherence = None
         self.formatadherence_c = {}
+        
+        # Master Data Adherence details
+        self.masterData = None
+        self.masterData_c = {}
+
+        # Data duplicate info
+        self.dataDuplicate = None
 
         # Total records
         self.totalRows = self.table_df.count()
 
       # Do we really need this method?
     def loadFromCsv(self, path_to_csv):
-        self.table_df = spark.read.csv(path=path_to_csv,header=True)
+        self.table_df = self.spark.read.csv(path=path_to_csv,header=True)
 
         hashlib.sha1().update(str(time.time()).encode("utf-8"))
         self.table_name = "table_"+hashlib.sha1().hexdigest()[:5]
@@ -90,7 +104,7 @@ class DataQualityIndexOf:
 
       # *** Method completeness begins here ***
     def completeness(self):
-         """ To calculate the completeness constraint dimension in the dataset """
+        """ To calculate the completeness constraint dimension in the dataset """
 
         # If the complete dimension value is already calculated, we just return the score
         if (self.complete != None):
@@ -239,7 +253,7 @@ class DataQualityIndexOf:
 
       # *** Method getDimensionDetails begins here ***
     def getDimensionDetails(self, dimension):
-          """ To display the data quality score for given dimension and all the columns calculated """
+        """ To display the data quality score for given dimension and all the columns calculated """
 
           # We can probably do better here!!
         if (dimension == self.Dimensions[0]):
@@ -256,3 +270,45 @@ class DataQualityIndexOf:
             return self.formatadherence_c
 
       # *** Method getDimensionDetails ends here ***
+    
+    def  masterDataAdherence(self, masterDataFile, targetColumns):
+        
+        # masterdatafile object
+        mdfObj = msd3()
+        masterDataSet = set()
+        # get the masterdata data
+        masterData_csv = mdfObj.retrieve_master_data_file(masterDataFile)
+        # load it into a fast searchable data type like the set
+        for row in masterData_csv:
+            masterDataSet.update(row)
+        
+        total_masterDataCount = 0
+        
+        for targetColumn in targetColumns:
+            data_count = self.table_df.select(targetColumn).rdd.flatMap(list).filter(lambda x: x in masterDataSet).collect()
+            mda_c = len(data_count) / self.totalRows
+
+            # Storing the column name and the respective completeness score
+            self.masterData_c[targetColumn] = mda_c
+            total_masterDataCount += mda_c
+
+        self.masterData = total_masterDataCount / len(targetColumns)
+        
+        return self.masterData
+        
+    def dataDuplication(self, colsArray, approx=False):
+        
+        # Concatenate specified columns
+        df2 = self.table_df.withColumn("concatenated_column", concat_ws("", *[col(c) for c in colsArray]))
+        
+        # Encrypt the concatenated column using SHA-256
+        df2 = df2.withColumn("hashed_column", sha2("concatenated_column", 256))
+
+        if approx:
+            y = df2.agg(approx_count_distinct("hashed_column")).collect()
+            approx_count = y[0][0]
+        else:
+            approx_count = df2.select("hashed_column").distinct().count()
+        
+        self.dataDuplicate = approx_count / self.totalRows
+        return self.dataDuplicate
