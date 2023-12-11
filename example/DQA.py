@@ -1,4 +1,4 @@
-from MasterDataS3 import MasterDataS3 as msd3
+# from MasterDataS3 import MasterDataS3 as msd3
 import hashlib
 import time
 
@@ -271,30 +271,30 @@ class DataQualityIndexOf:
 
       # *** Method getDimensionDetails ends here ***
     
-    def  masterDataAdherence(self, masterDataFile, targetColumns):
+    # def  masterDataAdherence(self, masterDataFile, targetColumns):
         
-        # masterdatafile object
-        mdfObj = msd3()
-        masterDataSet = set()
-        # get the masterdata data
-        masterData_csv = mdfObj.retrieve_master_data_file(masterDataFile)
-        # load it into a fast searchable data type like the set
-        for row in masterData_csv:
-            masterDataSet.update(row)
+    #     # masterdatafile object
+    #     mdfObj = msd3()
+    #     masterDataSet = set()
+    #     # get the masterdata data
+    #     masterData_csv = mdfObj.retrieve_master_data_file(masterDataFile)
+    #     # load it into a fast searchable data type like the set
+    #     for row in masterData_csv:
+    #         masterDataSet.update(row)
         
-        total_masterDataCount = 0
+    #     total_masterDataCount = 0
         
-        for targetColumn in targetColumns:
-            data_count = self.table_df.select(targetColumn).rdd.flatMap(list).filter(lambda x: x in masterDataSet).collect()
-            mda_c = len(data_count) / self.totalRows
+    #     for targetColumn in targetColumns:
+    #         data_count = self.table_df.select(targetColumn).rdd.flatMap(list).filter(lambda x: x in masterDataSet).collect()
+    #         mda_c = len(data_count) / self.totalRows
 
-            # Storing the column name and the respective completeness score
-            self.masterData_c[targetColumn] = mda_c
-            total_masterDataCount += mda_c
+    #         # Storing the column name and the respective completeness score
+    #         self.masterData_c[targetColumn] = mda_c
+    #         total_masterDataCount += mda_c
 
-        self.masterData = total_masterDataCount / len(targetColumns)
+    #     self.masterData = total_masterDataCount / len(targetColumns)
         
-        return self.masterData
+    #     return self.masterData
         
     def dataDuplication(self, colsArray, approx=False):
         
