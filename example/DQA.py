@@ -1,7 +1,6 @@
 # from MasterDataS3 import MasterDataS3 as msd3
 import hashlib
 import time
-
 from pyspark.sql.functions import sha2, concat_ws, approx_count_distinct, col
 
 class DataQualityIndexOf:
@@ -59,7 +58,11 @@ class DataQualityIndexOf:
         self.masterData_c = {}
 
         # Data duplicate info
-        self.dataDuplicate = None
+        self.dataDuplication = None
+
+        # Outlier Detection
+        self.outlierScore = None
+        self.outlierDict = {}
 
         # Total records
         self.totalRows = self.table_df.count()
@@ -271,30 +274,30 @@ class DataQualityIndexOf:
 
       # *** Method getDimensionDetails ends here ***
     
-    # def  masterDataAdherence(self, masterDataFile, targetColumns):
+    def  masterDataAdherence(self, masterDataFile, targetColumns):
         
-    #     # masterdatafile object
-    #     mdfObj = msd3()
-    #     masterDataSet = set()
-    #     # get the masterdata data
-    #     masterData_csv = mdfObj.retrieve_master_data_file(masterDataFile)
-    #     # load it into a fast searchable data type like the set
-    #     for row in masterData_csv:
-    #         masterDataSet.update(row)
+        # masterdatafile object
+        mdfObj = msd3()
+        masterDataSet = set()
+        # get the masterdata data
+        masterData_csv = mdfObj.retrieve_master_data_file(masterDataFile)
+        # load it into a fast searchable data type like the set
+        for row in masterData_csv:
+            masterDataSet.update(row)
         
-    #     total_masterDataCount = 0
+        total_masterDataCount = 0
         
-    #     for targetColumn in targetColumns:
-    #         data_count = self.table_df.select(targetColumn).rdd.flatMap(list).filter(lambda x: x in masterDataSet).collect()
-    #         mda_c = len(data_count) / self.totalRows
+        for targetColumn in targetColumns:
+            data_count = self.table_df.select(targetColumn).rdd.flatMap(list).filter(lambda x: x in masterDataSet).collect()
+            mda_c = len(data_count) / self.totalRows
 
-    #         # Storing the column name and the respective completeness score
-    #         self.masterData_c[targetColumn] = mda_c
-    #         total_masterDataCount += mda_c
+            # Storing the column name and the respective completeness score
+            self.masterData_c[targetColumn] = mda_c
+            total_masterDataCount += mda_c
 
-    #     self.masterData = total_masterDataCount / len(targetColumns)
+        self.masterData = total_masterDataCount / len(targetColumns)
         
-    #     return self.masterData
+        return self.masterData
         
     def dataDuplication(self, colsArray, approx=False):
         
@@ -310,5 +313,48 @@ class DataQualityIndexOf:
         else:
             approx_count = df2.select("hashed_column").distinct().count()
         
-        self.dataDuplicate = approx_count / self.totalRows
-        return self.dataDuplicate
+        self.dataDuplication = approx_count / self.totalRows
+        return self.dataDuplication
+    
+    def getOutlierScores(self, columns_of_interest):
+        """
+        Detect outliers using the Interquartile Range (IQR) method for specified columns.
+
+        Parameters:
+        - columns_of_interest: List of column names for which outliers should be detected
+
+        Returns:
+        - Dictionary with column names as keys and the count of unique rows with outliers as values
+        """
+        result_dict = {}
+        total_outliers_count = 0
+        outlier_score = 0
+        self.outlierScore = 0
+
+        for col_name in columns_of_interest:
+            # Calculate IQR for the current column
+            quantiles = self.table_df.approxQuantile(col_name, [0.25, 0.75], 0.05)
+            q1 = quantiles[0]
+            q3 = quantiles[1]
+            iqr = q3 - q1
+
+            # Define lower and upper bounds for outliers
+            lower_bound = q1 - 1.5 * iqr
+            upper_bound = q3 + 1.5 * iqr
+
+            # Filter rows outside the bounds
+            outliers_df = df.filter((col(col_name) < lower_bound) | (col(col_name) > upper_bound))
+
+            outliers_count = outliers_df.count()
+            total_outliers_count += outliers_count
+            unique_rows_with_outliers_count = df.select(columns_of_interest).distinct().count()
+            if unique_rows_with_outliers_count != 0:
+                outlier_score = 1 - (total_outliers_count/unique_rows_with_outliers_count)
+            # Add the result to the dictionary
+            result_dict[col_name] = outlier_score
+            self.outlierScore += outlier_score
+
+        self.outlierScore /= len(columns_of_interest)
+        self.outlierDict = result_dict
+        
+        return self.outlierScore
