@@ -9,6 +9,9 @@ class DataQualityIndexOf:
     completeness_ = "Completeness"
     rangeAdherence_ = "RangeAdherence"
     formatAdherence_ = "FormatAdherence"
+    masterDataAdherence_ = "MasterDataAdherence"
+    dataDuplication = "DataDuplication"
+    outlierDetection = "OutlierDetection"
 
     def __init__(self, spark_session=None ,path_to_csv=None, yaml_file=None):
         
@@ -34,6 +37,7 @@ class DataQualityIndexOf:
         # List of dimensions
         self.Dimensions = [self.uniqueness_,self.completeness_,self.rangeAdherence_,self.formatAdherence_]
 
+        # Storing the column names along with individual column scores.
         # Uniqueness constraints details
         self.uniq = None
         self.unique_c = {}
@@ -44,9 +48,6 @@ class DataQualityIndexOf:
 
         # Range Adherence details
         self.rangeadherence = None
-        # can store the column name and the score for each column
-        # that way whenever the user wants to know the score for a particular column,
-        # we can display it.
         self.rangeadherence_c = {}
 
         # Format Adherence details
@@ -67,7 +68,6 @@ class DataQualityIndexOf:
         # Total records
         self.totalRows = self.table_df.count()
 
-      # Do we really need this method?
     def loadFromCsv(self, path_to_csv):
         self.table_df = self.spark.read.csv(path=path_to_csv,header=True)
 
@@ -76,7 +76,7 @@ class DataQualityIndexOf:
 
         self.table_df.createOrReplaceTempView(self.table_name)
 
-      # *** Method uniqueness begins here ***
+    # *** Method uniqueness begins here ***
     def uniqueness(self):
         """ To calculate the uniqueness constraint dimension in the dataset """
 
@@ -89,23 +89,23 @@ class DataQualityIndexOf:
         self.uniq = 0
 
         unique_list = []
-        for col in self.table_df.columns:
-            uniq_i = self.table_df.select(col).distinct().count() / self.totalRows
+        for col_name in self.table_df.columns:
+            uniq_i = self.table_df.select(col_name).distinct().count() / self.totalRows
             unique_list.append(uniq_i)
 
             # Getting all the highest uniqueness scores
             # and creating a dictionary record for those columns.
             if uniq_i==1:
                 self.uniq=1
-                self.unique_c[col] = 1
+                self.unique_c[col_name] = 1
 
             self.uniq=max(self.uniq, uniq_i)
 
         return self.uniq
 
-      # *** Method uniqueness ends here ***
+    # *** Method uniqueness ends here ***
 
-      # *** Method completeness begins here ***
+    # *** Method completeness begins here ***
     def completeness(self):
         """ To calculate the completeness constraint dimension in the dataset """
 
@@ -118,9 +118,11 @@ class DataQualityIndexOf:
 
         # Read the extrinsic details provided by the user for
         # the Completeness dimension
-        user_defined_ips = self.yaml_read[self.completeness_]
-
-        self.complete_c = []
+        if (self.completeness_ not in self.yaml_read.keys()):
+            # As the method should calculate intrinsic data dimension
+            user_defined_ips = {}
+        else:
+            user_defined_ips = self.yaml_read[self.completeness_]
 
         for c in self.table_df.columns:
             df2 = self.table_df.filter(col(c).isNotNull())
@@ -144,9 +146,9 @@ class DataQualityIndexOf:
 
         return self.complete
 
-      # *** Method completeness ends here ***
+    # *** Method completeness ends here ***
 
-      # *** Method rangeAdherence begins here ***
+    # *** Method rangeAdherence begins here ***
     def rangeAdherence(self):
         """ To calculate the score for Range Adherence dimension in the dataset """
 
@@ -180,8 +182,14 @@ class DataQualityIndexOf:
         total_complete = 0
         rng_adherence_c = 0
 
-        # Adhering to the ranges provided by the user through the YAML file
-        user_ip_dict = self.yaml_read[self.rangeAdherence_]
+        # If the dimension is not defined in YAML, simply return no score 
+        # Can be improved in the future to return None (instead of 1)
+        if (self.rangeAdherence_ not in self.yaml_read.keys()):
+            return 1
+        else:
+            # Adhering to the ranges provided by the user through the YAML file
+            user_ip_dict = self.yaml_read[self.rangeAdherence_]
+            
         for column in user_ip_dict.keys():
             rng_adher = calculateRangeAdherenceScore(self.table_df, column, user_ip_dict[column])
 
@@ -194,9 +202,9 @@ class DataQualityIndexOf:
         self.rangeadherence = total_complete / len(user_ip_dict)
         return self.rangeadherence
 
-      # *** Method rangeAdherence ends here ***
+    # *** Method rangeAdherence ends here ***
 
-      # *** Method formatAdherence begins here ***
+    # *** Method formatAdherence begins here ***
     def formatAdherence(self):
         """ To calculate the score for Format Adherence dimension in the dataset """
 
@@ -215,9 +223,14 @@ class DataQualityIndexOf:
 
         total_complete = 0
         frmt_adherence_c = 0
-
-        # Adhering to the formats provided by the user through the YAML file
-        user_ip_dict = self.yaml_read[self.formatAdherence_]
+        
+        # If the dimension is not defined in YAML, simply return no score 
+        if (self.formatAdherence_ not in self.yaml_read.keys()):
+            return 1
+        else:
+            # Adhering to the formats provided by the user through the YAML file
+            user_ip_dict = self.yaml_read[self.formatAdherence_]
+        
         for column in user_ip_dict.keys():
             format_pattern = user_ip_dict[column]
 
@@ -225,7 +238,7 @@ class DataQualityIndexOf:
             temp_rdd = self.table_df.select(column).rdd.flatMap(list)
 
             # Getting the rows which match the format provided in the YAML file for the column.
-            fmt_adher = temp_rdd.map(lambda x: matchPattern(x,format_pattern)).filter(lambda x: x != None).count()
+            fmt_adher = temp_rdd.map(lambda x: matchPattern(str(x),format_pattern)).filter(lambda x: x != None).count()
 
             frmt_adherence_c = fmt_adher / self.totalRows
             self.formatadherence_c[column] = frmt_adherence_c
@@ -236,9 +249,9 @@ class DataQualityIndexOf:
 
         return self.formatadherence
 
-      # *** Method formatAdherence ends here ***
+    # *** Method formatAdherence ends here ***
 
-      # *** Method getDQA begins here ***
+    # *** Method getDQA begins here ***
     def getDQA(self):
         """ To get the aggregate data quality score for any given entire dataset """
         # Uniqueness dimension
@@ -252,9 +265,9 @@ class DataQualityIndexOf:
 
         return (uniq+comp+rng+fmt) / len(self.Dimensions)
 
-      # *** Method getDQA ends here ***
+    # *** Method getDQA ends here ***
 
-      # *** Method getDimensionDetails begins here ***
+    # *** Method getDimensionDetails begins here ***
     def getDimensionDetails(self, dimension):
         """ To display the data quality score for given dimension and all the columns calculated """
 
@@ -272,9 +285,10 @@ class DataQualityIndexOf:
             # Format Adherence constraint
             return self.formatadherence_c
 
-      # *** Method getDimensionDetails ends here ***
+    # *** Method getDimensionDetails ends here ***
     
     def  masterDataAdherence(self, masterDataFile, targetColumns):
+        """ To validate the data adherence with master dataset """
         
         # masterdatafile object
         mdfObj = msd3()
@@ -300,6 +314,7 @@ class DataQualityIndexOf:
         return self.masterData
         
     def dataDuplication(self, colsArray, approx=False):
+        """ To check for data duplication in the dataset """
         
         # Concatenate specified columns
         df2 = self.table_df.withColumn("concatenated_column", concat_ws("", *[col(c) for c in colsArray]))
@@ -346,10 +361,9 @@ class DataQualityIndexOf:
             outliers_df = df.filter((col(col_name) < lower_bound) | (col(col_name) > upper_bound))
 
             outliers_count = outliers_df.count()
-            total_outliers_count += outliers_count
             unique_rows_with_outliers_count = df.select(columns_of_interest).distinct().count()
             if unique_rows_with_outliers_count != 0:
-                outlier_score = 1 - (total_outliers_count/unique_rows_with_outliers_count)
+                outlier_score = 1 - (outliers_count/self.totalRows)
             # Add the result to the dictionary
             result_dict[col_name] = outlier_score
             self.outlierScore += outlier_score
