@@ -1,0 +1,59 @@
+# Welcome to YAML file configuration for spark-DQA library
+# This file contains all the user-provided input details for calculation of extrinsic scores and also a few other settings
+# Let's delve into the structure
+# As part of DQA, we support the following dimensions in the YAML file for now.
+#    Dimension Name    |     Intrinsic      |    Extrinsic     |
+# 1) Completeness*     |       Yes          |      Yes         |
+# 2) Range Adherence   | Not yet supported  |      Yes         |
+# 3) Format Adherence  | Not yet supported  |      Yes         |
+# 
+# Note: For those dimensions which also calculate the intrinsic scores, would proceed with calculation of the score even if no instructions are provided here
+
+# Range Adherence,
+# We define the dimension, and then on the next line with tab define the columns along with their respective ranges in dictionary format
+# Here is the structure for this dimension
+#RangeAdherence:
+#    col_name_1: [0, 10]
+#    'col_name 2': [0, inf]
+#
+# Note: The range should be defined in one interval in [x, y] format. If there is no upper bound, one can use 'inf' as an indication that there is no upper limit
+#       Similarly for lower bound, one can use '-inf' as an indicating factor.
+#
+# Below is an example of range for Electrical Permits dataset from NYC Open Data Portal
+RangeAdherence:
+  # Ranges defined for different columns in [] format
+  Quanity: [0,10]
+  Fee_Amount: [0, inf]
+  Cost: [0,inf]
+  Total_KW: [0, inf]
+  Total_Circuits: [-inf, 100]
+  'Total HPKW': [-inf, inf]
+
+# Format Adherence,
+# We define the dimension and then provide the column name and regex expression for that column name which needs to be adhered in a dictionary format in 
+# the next line
+# Here is the structure for this dimension
+#FormatAdherence:
+#   col_name_1: '[0-9]([A-Z])+'
+#   col_name_2: '[0-9]{10}'
+#
+# Below is an example of regex expression defined for Electrical Permits dataset from NYC Open Data Portal
+FormatAdherence:
+  # Formats defined for different columns in regex patterns
+  Work_ID: '([aA-zZ0-9]+)-([aA-zZ0-9]+)-([aA-zZ0-9]+)-([aA-zZ0-9]+)-([aA-zZ0-9]+)'
+
+# Completeness,
+# Defining the dimension name and then provide the column name and list of values which can be considered as a substitute for NULL in the dataset
+# For example, for date column in a dataset if we have values like 1900-01-01 in the past or 2999-01-01 in the future, we can consider them equivalent to NULL based on 
+# most study cases.
+# 
+# Note: As this is an extrinsic property, so based on the details provided here the library would take into account while calculating the score
+# Here is the structure for this dimension
+#Completeness:
+#   col_name_1: [-999, 999]
+#   col_name_2: ['None','']
+#
+# Below is an example of list of values to be considered as null for the column 'Number_Size' from Electrical Permits dataset downloaded from NYC Open Data Portal
+Completeness:
+  Number_Size: ['','None']
+  
