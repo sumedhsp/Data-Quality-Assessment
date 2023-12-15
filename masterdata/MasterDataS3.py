@@ -6,8 +6,8 @@ class MasterDataS3:
     
     def __init__(self, aws_access_key_id=None, aws_secret_access_key=None):
         # public aws access key and secret key
-        self.aws_access_key_id = 'AKIAURO4GNRE2T2GX5VC'
-        self.aws_secret_access_key = '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'
+        self.aws_access_key_id = ''
+        self.aws_secret_access_key = ''
 
         # public S3 bucket object 
         self.s3 = None
