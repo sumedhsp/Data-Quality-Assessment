@@ -15,3 +15,8 @@ a) The program requires user input in the form of the address of the dataset and
 b) For functions masterDataAdherence as well as getOutlierScores, the user needs to specify the target columns as well.
 
 c) The program returns all the seven scores of the data dimensions of the respective dataset.
+
+
+Future Work:
+
+a) In its current state, the program requires the user to manually enter the numeric columns of the dataset. The program can be tuned to recognise the numeric columns in the dataset and perform the required operations to get the desired dimension scores.
