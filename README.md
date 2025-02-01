@@ -125,11 +125,11 @@ format_rules:
 ---
 
 ## 🤝 Contributors
-👨‍💻 Team Members:
+👨‍💻 **Team Members**:
 
-Sriphani Bellamkonda (`sb9179@nyu.edu`)
-Kaartikeya Panjwani (`kp3291@nyu.edu@nyu.edu`)
-Sumedh Parvatikar (`sp7479@nyu.edu`)
+- **Sriphani Bellamkonda** (`sb9179@nyu.edu`)
+- **Kaartikeya Panjwani** (`kp3291@nyu.edu@nyu.edu`)
+- **Sumedh Parvatikar** (`sp7479@nyu.edu`)
 
 ---
 
